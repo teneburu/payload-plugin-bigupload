@@ -1,113 +1,89 @@
-import type { CollectionSlug, Config } from 'payload'
+import {
+  Adapter,
+  CollectionOptions,
+  GeneratedAdapter,
+} from '@payloadcms/plugin-cloud-storage/types'
 
-export type PayloadPluginBiguploadConfig = {
-  /**
-   * List of collections to add a custom field
-   */
-  collections?: Partial<Record<CollectionSlug, true>>
-  disabled?: boolean
-}
+import { cloudStoragePlugin } from '@payloadcms/plugin-cloud-storage'
+import type { BigUploadPlugin, S3StorageOptions } from './types.js'
+import * as AWS from '@aws-sdk/client-s3'
 
-export const payloadPluginBigupload =
-  (pluginOptions: PayloadPluginBiguploadConfig) =>
-  (config: Config): Config => {
-    if (!config.collections) {
-      config.collections = []
+import { getGenerateURL } from './adapter/generateURL.js'
+import { getHandleDelete } from './adapter/handleDelete.js'
+import { getHandleUpload } from './adapter/handleUpload.js'
+import { getHandler } from './adapter/staticHandler.js'
+import { Config } from 'payload'
+
+export const BigUpload: BigUploadPlugin =
+  (bigUploadOptions: S3StorageOptions) =>
+  (incomingConfig: Config): Config => {
+    if (bigUploadOptions.enabled === false) {
+      return incomingConfig
     }
 
-    config.collections.push({
-      slug: 'plugin-collection',
-      fields: [
-        {
-          name: 'id',
-          type: 'text',
+    const adapter = s3StorageInternal(bigUploadOptions)
+
+    // Add adapter to each collection option object
+    const collectionsWithAdapter = Object.entries(bigUploadOptions.collections).reduce(
+      (acc, [slug, collOptions]) => ({
+        ...acc,
+        [slug]: {
+          ...(collOptions === true ? {} : collOptions),
+          adapter,
         },
-      ],
-    })
+      }),
+      {} as Record<string, CollectionOptions>,
+    )
 
-    if (pluginOptions.collections) {
-      for (const collectionSlug in pluginOptions.collections) {
-        const collection = config.collections.find(
-          (collection) => collection.slug === collectionSlug,
-        )
-
-        if (collection) {
-          collection.fields.push({
-            name: 'addedByPlugin',
-            type: 'text',
-            admin: {
-              position: 'sidebar',
-            },
-          })
+    // Set disableLocalStorage: true for collections specified in the plugin options
+    const config = {
+      ...incomingConfig,
+      collections: (incomingConfig.collections || []).map((collection) => {
+        if (!collectionsWithAdapter[collection.slug]) {
+          return collection
         }
-      }
-    }
 
-    /**
-     * If the plugin is disabled, we still want to keep added collections/fields so the database schema is consistent which is important for migrations.
-     * If your plugin heavily modifies the database schema, you may want to remove this property.
-     */
-    if (pluginOptions.disabled) {
-      return config
-    }
-
-    if (!config.endpoints) {
-      config.endpoints = []
-    }
-
-    if (!config.admin) {
-      config.admin = {}
-    }
-
-    if (!config.admin.components) {
-      config.admin.components = {}
-    }
-
-    if (!config.admin.components.beforeDashboard) {
-      config.admin.components.beforeDashboard = []
-    }
-
-    config.admin.components.beforeDashboard.push(
-      `payload-plugin-bigupload/client#BeforeDashboardClient`,
-    )
-    config.admin.components.beforeDashboard.push(
-      `payload-plugin-bigupload/rsc#BeforeDashboardServer`,
-    )
-
-    config.endpoints.push({
-      handler: () => {
-        return Response.json({ message: 'Hello from custom endpoint' })
-      },
-      method: 'get',
-      path: '/my-plugin-endpoint',
-    })
-
-    const incomingOnInit = config.onInit
-
-    config.onInit = async (payload) => {
-      // Ensure we are executing any existing onInit functions before running our own.
-      if (incomingOnInit) {
-        await incomingOnInit(payload)
-      }
-
-      const { totalDocs } = await payload.count({
-        collection: 'plugin-collection',
-        where: {
-          id: {
-            equals: 'seeded-by-plugin',
+        return {
+          ...collection,
+          upload: {
+            ...(typeof collection.upload === 'object' ? collection.upload : {}),
+            disableLocalStorage: true,
           },
-        },
-      })
-
-      if (totalDocs === 0) {
-        await payload.create({
-          collection: 'plugin-collection',
-          data: {
-            id: 'seeded-by-plugin',
-          },
-        })
-      }
+          endpoints: {
+            
+          }
+        }
+      }),
     }
 
-    return config
+    return cloudStoragePlugin({
+      collections: collectionsWithAdapter,
+    })(config)
   }
+
+function s3StorageInternal({ acl = 'private', bucket, config = {} }: S3StorageOptions): Adapter {
+  return ({ collection, prefix = '' }): GeneratedAdapter => {
+    let storageClient: AWS.S3 | null = null
+    const getStorageClient: () => AWS.S3 = () => {
+      if (storageClient) {
+        return storageClient
+      }
+      storageClient = new AWS.S3(config)
+      return storageClient
+    }
+
+    return {
+      name: 's3',
+      generateURL: getGenerateURL({ bucket, config }),
+      handleDelete: getHandleDelete({ bucket, getStorageClient }),
+      handleUpload: getHandleUpload({
+        acl,
+        bucket,
+        collection,
+        getStorageClient,
+        prefix,
+      }),
+      staticHandler: getHandler({ bucket, collection, getStorageClient }),
+    }
+  }
+}

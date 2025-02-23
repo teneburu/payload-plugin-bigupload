@@ -109,5 +109,9 @@
       "sharp"
     ]
   },
-  "registry": "https://registry.npmjs.org/"
+  "registry": "https://registry.npmjs.org/",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.750.0",
+    "@payloadcms/plugin-cloud-storage": "^3.24.0"
+  }
 }
