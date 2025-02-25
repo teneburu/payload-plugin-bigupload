@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "lib": [
-      "DOM",
-      "DOM.Iterable",
-      "ES2022"
-    ],
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "rootDir": "./",
     "allowJs": true,
     "skipLibCheck": true,
@@ -13,6 +9,7 @@
     "esModuleInterop": true,
     "module": "NodeNext",
     "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -25,10 +22,13 @@
         "name": "next"
       }
     ],
+    "paths": {
+      "@payload-config": ["./dev/payload.config.ts"]
+    }
   },
   "include": [
     "./src/**/*.ts",
     "./src/**/*.tsx",
-    "./dev/next-env.d.ts"
-  ],
+    "./dev/next-env.d.ts",
+  ]
 }

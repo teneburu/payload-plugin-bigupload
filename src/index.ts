@@ -1,18 +1,17 @@
+import * as AWS from '@aws-sdk/client-s3'
+import { Config } from 'payload'
 import {
   Adapter,
   CollectionOptions,
   GeneratedAdapter,
 } from '@payloadcms/plugin-cloud-storage/types'
-
 import { cloudStoragePlugin } from '@payloadcms/plugin-cloud-storage'
 import type { BigUploadPlugin, S3StorageOptions } from './types.js'
-import * as AWS from '@aws-sdk/client-s3'
 
 import { getGenerateURL } from './adapter/generateURL.js'
 import { getHandleDelete } from './adapter/handleDelete.js'
 import { getHandleUpload } from './adapter/handleUpload.js'
 import { getHandler } from './adapter/staticHandler.js'
-import { Config } from 'payload'
 
 export const BigUpload: BigUploadPlugin =
   (bigUploadOptions: S3StorageOptions) =>
@@ -20,6 +19,8 @@ export const BigUpload: BigUploadPlugin =
     if (bigUploadOptions.enabled === false) {
       return incomingConfig
     }
+
+    console.log('BigUpload module loaded')
 
     const adapter = s3StorageInternal(bigUploadOptions)
 
@@ -49,9 +50,6 @@ export const BigUpload: BigUploadPlugin =
             ...(typeof collection.upload === 'object' ? collection.upload : {}),
             disableLocalStorage: true,
           },
-          endpoints: {
-            
-          }
         }
       }),
     }
@@ -72,6 +70,7 @@ function s3StorageInternal({ acl = 'private', bucket, config = {} }: S3StorageOp
       return storageClient
     }
 
+    console.log('s3StorageInternal module loaded')
     return {
       name: 's3',
       generateURL: getGenerateURL({ bucket, config }),
